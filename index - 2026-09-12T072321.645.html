@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File d'attente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #F1EDE3;
+    --paper: #FBFAF6;
+    --ink: #1C2B39;
+    --navy: #16324F;
+    --navy-light: #24486E;
+    --amber: #D98E04;
+    --amber-light: #F2B33D;
+    --slate: #5B6B7C;
+    --line: #D8D2C2;
+    --success: #2F7A4F;
+    --danger: #A5432E;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+  }
+  .num{ font-family: 'Archivo Expanded', sans-serif; }
+
+  /* ---------- App shell ---------- */
+  .app{ display:flex; flex-direction:column; min-height:100vh; }
+
+  .switcher-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 18px;
+    background: var(--paper);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:8px;
+    font-size:14px; color:var(--slate);
+  }
+  .brand strong{ color:var(--navy); font-weight:600; }
+  .switcher{
+    display:flex; gap:2px;
+    background: var(--bg);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:2px;
+  }
+  .switcher button{
+    border:none; background:transparent; cursor:pointer;
+    font-family:inherit; font-size:13px; font-weight:500;
+    color: var(--slate);
+    padding:7px 12px;
+    border-radius:6px;
+    transition: background .15s, color .15s;
+  }
+  .switcher button.active{
+    background: var(--navy);
+    color: #fff;
+  }
+  .conn-status{
+    display:flex; align-items:center; gap:6px;
+    font-size:12px; color: var(--slate);
+  }
+  .conn-dot{
+    width:8px; height:8px; border-radius:50%;
+    background: var(--danger);
+  }
+  .conn-dot.ok{ background: var(--success); }
+
+  .view{ flex:1; padding: 28px; }
+
+  /* ---------- ÉCRAN (display) ---------- */
+  .ecran{
+    background: var(--navy);
+    color: #fff;
+    border-radius: 14px;
+    min-height: calc(100vh - 90px);
+    padding: 36px 44px;
+    display:flex; flex-direction:column;
+    position:relative;
+    overflow:hidden;
+  }
+  .ecran::before{
+    content:"";
+    position:absolute; inset:0;
+    background: radial-gradient(circle at 85% -10%, rgba(217,142,4,0.18), transparent 55%);
+    pointer-events:none;
+  }
+  .ecran-top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom: 1px solid rgba(255,255,255,0.18);
+    padding-bottom:18px;
+    margin-bottom: 30px;
+  }
+  .ecran-lieu{ font-size: 20px; font-weight: 600; letter-spacing:.2px; }
+  .ecran-clock{ font-size: 20px; color: rgba(255,255,255,0.75); font-variant-numeric: tabular-nums; }
+
+  .ecran-main{
+    flex:1;
+    display:flex;
+    gap: 48px;
+    align-items:center;
+  }
+  .ecran-current{
+    flex: 1.3;
+    text-align:center;
+  }
+  .ecran-current-label{
+    font-size: 15px;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 6px;
+  }
+  .ecran-current-name{
+    font-size: clamp(48px, 9vw, 110px);
+    font-weight: 800;
+    line-height: 1.08;
+    color: var(--amber-light);
+    transition: transform .25s ease;
+    word-break: break-word;
+  }
+  .ecran-current-name.flash{ animation: flashTicket .7s ease; }
+  .ecran-current-cat{
+    font-size: 20px;
+    color: rgba(255,255,255,0.65);
+    margin-top: 8px;
+  }
+  @keyframes flashTicket{
+    0%{ transform: scale(0.85); opacity:0; }
+    55%{ transform: scale(1.04); opacity:1; }
+    100%{ transform: scale(1); }
+  }
+  .ecran-current-guichet{
+    font-size: 26px;
+    margin-top: 10px;
+    color: #fff;
+  }
+  .ecran-empty{
+    font-size: 22px;
+    color: rgba(255,255,255,0.5);
+  }
+
+  .ecran-side{
+    flex:1;
+    display:flex; flex-direction:column; gap:22px;
+  }
+  .ecran-panel-title{
+    font-size:13px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom:10px;
+  }
+  .guichet-rows{ display:flex; flex-direction:column; gap:8px; }
+  .guichet-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background: rgba(255,255,255,0.06);
+    border-radius:8px;
+    padding:10px 14px;
+  }
+  .guichet-row .name{ font-size:15px; color: rgba(255,255,255,0.8); }
+  .guichet-row .ticket{
+    font-size:16px; font-weight:700;
+    max-width: 55%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .guichet-row .ticket.idle{ color: rgba(255,255,255,0.35); font-weight:500; font-size:14px; }
+
+  .waiting-list{
+    display:flex; flex-wrap:wrap; gap:8px;
+  }
+  .waiting-chip{
+    font-size:15px; font-weight:600;
+    background: rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.15);
+    border-radius:6px;
+    padding:6px 12px;
+    max-width: 200px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .waiting-count{
+    font-size:15px; color: rgba(255,255,255,0.55); margin-top:6px;
+  }
+
+  /* ---------- SECRÉTAIRE (accueil + cabines) ---------- */
+  .agent{ max-width: 720px; margin: 0 auto; }
+  .card{
+    background: var(--paper);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding: 22px 24px;
+    margin-bottom: 18px;
+  }
+  .card h2{
+    margin:0 0 14px 0;
+    font-size:16px;
+    color: var(--navy);
+    font-weight:600;
+  }
+  .btn-row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .btn{
+    font-family:inherit; font-size:15px; font-weight:600;
+    border:none; border-radius:8px;
+    padding:12px 18px;
+    cursor:pointer;
+    transition: opacity .15s;
+  }
+  .btn:hover{ opacity:.9; }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn-primary{ background: var(--navy); color:#fff; }
+  .btn-success{ background: var(--success); color:#fff; }
+  .btn-quiet{ background: transparent; color: var(--navy); border:1px solid var(--line); }
+  .queue-preview{ font-size:14px; color: var(--slate); margin-top:8px; }
+  .sub-inline{ color: var(--slate); font-size:14px; margin: 0 0 14px 0; }
+
+  .cabine-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background: var(--bg);
+    border-radius:10px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+  }
+  .cabine-name{ font-size:15px; font-weight:600; color: var(--ink); }
+  .cabine-status{ font-size:13px; margin-top:3px; }
+  .cabine-status.occupied{ color: var(--amber); font-weight:600; }
+  .cabine-status.free{ color: var(--slate); }
+
+  .settings-toggle{
+    background:none; border:none; color:var(--slate);
+    font-size:13px; cursor:pointer; text-decoration:underline;
+    padding:0; margin-top:4px;
+  }
+  .settings-block{ margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+  .row-line{ display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+  .row-line input{
+    font-family:inherit; font-size:14px;
+    border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; background:#fff; color:var(--ink);
+  }
+  .remove-x{
+    background:none; border:none; color:var(--danger);
+    cursor:pointer; font-size:18px; line-height:1; padding:0 4px;
+  }
+  .add-row{ display:flex; gap:8px; margin-top:6px; }
+  .add-row input{ flex:1; }
+  .rename-input{ flex:1; }
+
+  /* ---------- Motifs de visite ---------- */
+  .name-input{
+    width: 100%;
+    font-family:inherit; font-size:16px;
+    border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; background:#fff; color:var(--ink);
+    margin-bottom: 14px;
+  }
+  .name-input:focus{ outline: 2px solid var(--navy-light); outline-offset: 1px; }
+  .cat-grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap:14px;
+  }
+  .cat-btn{
+    background: var(--paper);
+    border:1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 16px;
+    font-family:inherit;
+    cursor:pointer;
+    transition: border-color .15s, transform .1s;
+  }
+  .cat-btn:hover{ border-color: var(--navy); }
+  .cat-btn:active{ transform: scale(0.98); }
+  .cat-btn.priority{ border-color: var(--amber); }
+  .cat-btn.priority .label{ color: var(--amber); }
+  .cat-btn .label{ font-size:15px; color: var(--ink); font-weight:600; }
+
+  .ticket-result{
+    margin-top: 30px;
+    background: var(--navy);
+    color:#fff;
+    border-radius: 14px;
+    padding: 32px;
+  }
+  .ticket-result .tlabel{ font-size:14px; color: rgba(255,255,255,0.6); margin-bottom:8px;}
+  .ticket-result .tname{ font-size: 34px; font-weight:800; color: var(--amber-light); word-break: break-word; }
+  .ticket-result .tcat{ font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+  .ticket-result .tpos{ font-size:15px; color: rgba(255,255,255,0.75); margin-top:10px; }
+
+  /* ---------- Planning (rendez-vous) ---------- */
+  .day-tabs{
+    display:flex; gap:6px; overflow-x:auto;
+    margin-bottom: 16px; padding-bottom: 4px;
+  }
+  .day-tab{
+    flex:0 0 auto;
+    border:1px solid var(--line); background: var(--bg); color: var(--ink);
+    font-family:inherit; font-size:13px; font-weight:500;
+    padding:8px 14px; border-radius:8px; cursor:pointer; white-space:nowrap;
+  }
+  .day-tab.active{ background: var(--navy); border-color: var(--navy); color:#fff; }
+
+  .slot-list{ display:flex; flex-direction:column; gap:6px; }
+  .slot-row{
+    display:flex; align-items:center; gap:12px;
+    background: var(--bg); border-radius:8px; padding:10px 14px;
+  }
+  .slot-time{ font-size:14px; font-weight:700; color: var(--navy); width:48px; flex-shrink:0; }
+  .slot-free{ flex:1; font-size:14px; color: var(--slate); }
+  .slot-info{ flex:1; }
+  .slot-name{ font-size:15px; font-weight:600; color: var(--ink); }
+  .slot-cat{ font-size:13px; color: var(--slate); }
+  .slot-actions{ display:flex; gap:8px; align-items:center; flex-shrink:0; }
+  .slot-row-form{ flex-direction:column; align-items:stretch; }
+  .slot-form{ display:flex; flex-direction:column; gap:10px; width:100%; }
+  .slot-row-done{ opacity: 0.6; }
+  .slot-row-done .slot-name{ text-decoration: line-through; }
+  .slot-row-done .slot-cat{ font-style: italic; }
+
+  @media (max-width: 720px){
+    .ecran-main{ flex-direction:column; gap:28px; }
+    .view{ padding:16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="switcher-row">
+    <div class="brand">File d'attente — <strong id="lieuLabel">Station thermale</strong></div>
+    <div class="switcher" id="switcher">
+      <button data-view="secretaire">Secrétaire</button>
+      <button data-view="planning">Planning</button>
+      <button data-view="historique">Historique</button>
+      <button data-view="gerant">Gérant</button>
+      <button data-view="ecran">Écran</button>
+    </div>
+    <div class="conn-status"><span class="conn-dot" id="connDot"></span><span id="connLabel">Connexion...</span></div>
+  </div>
+
+  <div class="view" id="viewContainer"></div>
+</div>
+
+<script>
+/* ---------------------------------------------------------
+   Connexion au serveur partagé (source de vérité commune
+   à tous les écrans connectés)
+--------------------------------------------------------- */
+let serverState = {
+  lieu: "Station thermale",
+  categories: [],
+  queue: [],
+  guichets: [],
+  servedCount: 0,
+  lastCalled: null,
+  callSeq: 0,
+  planningConfig: { startHour: 8, endHour: 18, slotMinutes: 30 },
+  appointments: [],
+  history: [],
+  pricePerPerson: 0,
+  totalRevenue: 0,
+};
+let lastSeenCallSeq = 0;
+let flashNow = false;
+let connected = false;
+
+let localView = "secretaire";  // propre à cet écran, jamais synchronisé
+let lastAddedId = null;        // suit la dernière personne ajoutée sur CET écran
+let catSettingsOpen = false;   // le panneau "Gérer les motifs" reste ouvert entre deux mises à jour
+let guichetSettingsOpen = false; // le panneau "Gérer les cabines" reste ouvert entre deux mises à jour
+let planningSelectedDate = null; // date affichée dans le planning (YYYY-MM-DD), null = aujourd'hui
+let openSlotKey = null;          // créneau en cours de réservation ("date|heure")
+let planningSettingsOpen = false;
+
+let ws;
+function connect(){
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(proto + "://" + location.host);
+
+  ws.onopen = () => { connected = true; updateConnStatus(); };
+  ws.onclose = () => { connected = false; updateConnStatus(); setTimeout(connect, 1500); };
+  ws.onerror = () => { connected = false; updateConnStatus(); };
+
+  ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+    if(msg.type === "state"){
+      const isNewCall = msg.state.callSeq !== lastSeenCallSeq;
+      flashNow = isNewCall;
+      lastSeenCallSeq = msg.state.callSeq;
+      serverState = msg.state;
+      render();
+    }
+  };
+}
+connect();
+
+function send(payload){
+  if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+}
+
+function updateConnStatus(){
+  const dot = document.getElementById("connDot");
+  const label = document.getElementById("connLabel");
+  if(!dot || !label) return;
+  dot.classList.toggle("ok", connected);
+  label.textContent = connected ? "Connecté" : "Connexion au serveur…";
+}
+
+/* ---------------------------------------------------------
+   Actions envoyées au serveur (le serveur seul modifie l'état)
+--------------------------------------------------------- */
+function makeId(){ return Date.now() + "-" + Math.random().toString(36).slice(2, 8); }
+
+function addPerson(name, label, priority){
+  const id = makeId();
+  lastAddedId = id;
+  send({ type: "addPerson", id, name, label, priority });
+}
+function finishAndCallNext(guichetId){ send({ type: "finishAndCallNext", guichetId }); }
+function callIntoCabine(guichetId){ send({ type: "callIntoCabine", guichetId }); }
+function addGuichet(name){ send({ type: "addGuichet", name }); }
+function removeGuichet(id){ send({ type: "removeGuichet", id }); }
+function renameGuichet(id, name){ send({ type: "renameGuichet", id, name }); }
+function addCategory(label){ send({ type: "addCategory", label }); }
+function removeCategoryAt(index){ send({ type: "removeCategoryAt", index }); }
+
+function addAppointment(date, time, name, label, priority){
+  send({ type: "addAppointment", id: makeId(), date, time, name, label, priority });
+}
+function removeAppointment(id){ send({ type: "removeAppointment", id }); }
+function checkInAppointment(id){ send({ type: "checkInAppointment", id }); }
+function updatePlanningConfig(config){ send({ type: "updatePlanningConfig", config }); }
+function setPricePerPerson(price){ send({ type: "setPricePerPerson", price }); }
+
+/* ---------------------------------------------------------
+   Rendu
+--------------------------------------------------------- */
+const viewContainer = document.getElementById("viewContainer");
+const lieuLabel = document.getElementById("lieuLabel");
+
+function setActiveSwitch(){
+  document.querySelectorAll("#switcher button").forEach(b => {
+    b.classList.toggle("active", b.dataset.view === localView);
+  });
+}
+
+document.getElementById("switcher").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if(!btn) return;
+  localView = btn.dataset.view;
+  render();
+});
+
+function render(){
+  lieuLabel.textContent = serverState.lieu;
+  setActiveSwitch();
+  if(localView === "secretaire") renderSecretaire();
+  else if(localView === "planning") renderPlanning();
+  else if(localView === "historique") renderHistorique();
+  else if(localView === "gerant") renderGerant();
+  else renderEcran();
+}
+
+/* ---- Vue SECRÉTAIRE (accueil + cabines, une seule personne gère tout) ---- */
+function renderSecretaire(){
+  viewContainer.innerHTML = `
+    <div class="agent">
+      <div class="card">
+        <h2>Nouvelle personne</h2>
+        <p class="sub-inline">Tapez le nom (ou une courte description) de la personne, puis choisissez le motif de sa visite. Ce nom s'affichera à l'écran quand ce sera son tour.</p>
+        <input type="text" id="personName" class="name-input" placeholder="Nom de la personne">
+        <div class="cat-grid" id="catGrid"></div>
+        <div id="ticketResultZone"></div>
+        <button class="settings-toggle" id="toggleCatSettings">Gérer les motifs</button>
+        <div class="settings-block" id="catSettings" style="display:${catSettingsOpen ? "block" : "none"};"></div>
+      </div>
+
+      <div class="card">
+        <h2>Cabines</h2>
+        <div id="cabineList"></div>
+        <div class="queue-preview">${serverState.queue.length} personne(s) en attente${serverState.queue[0] ? " — prochaine : " + serverState.queue[0].name + " (" + serverState.queue[0].label + ")" : ""}</div>
+        <button class="settings-toggle" id="toggleGuichetSettings">Gérer les cabines</button>
+        <div class="settings-block" id="guichetSettings" style="display:${guichetSettingsOpen ? "block" : "none"};"></div>
+      </div>
+    </div>
+  `;
+
+  const grid = document.getElementById("catGrid");
+  serverState.categories.forEach(cat => {
+    const btn = document.createElement("button");
+    btn.className = "cat-btn" + (cat.priority ? " priority" : "");
+    btn.innerHTML = `<div class="label">${cat.label}</div>`;
+    btn.addEventListener("click", () => {
+      const nameInput = document.getElementById("personName");
+      const name = nameInput.value.trim();
+      if(!name){ nameInput.focus(); return; }
+      addPerson(name, cat.label, cat.priority);
+      nameInput.value = "";
+      nameInput.focus();
+      renderAddedResult();
+    });
+    grid.appendChild(btn);
+  });
+  renderAddedResult();
+  if(catSettingsOpen) renderCatSettings();
+
+  document.getElementById("toggleCatSettings").addEventListener("click", () => {
+    catSettingsOpen = !catSettingsOpen;
+    render();
+  });
+
+  const list = document.getElementById("cabineList");
+  serverState.guichets.forEach(g => {
+    const row = document.createElement("div");
+    row.className = "cabine-row";
+    if(g.current){
+      row.innerHTML = `
+        <div>
+          <div class="cabine-name">${g.name}</div>
+          <div class="cabine-status occupied">Occupée — ${g.current.name} (${g.current.label})</div>
+        </div>
+        <button class="btn btn-primary cabine-btn" data-action="free" data-id="${g.id}">Cabine libérée</button>
+      `;
+    } else if(serverState.queue.length > 0){
+      row.innerHTML = `
+        <div>
+          <div class="cabine-name">${g.name}</div>
+          <div class="cabine-status free">Libre</div>
+        </div>
+        <button class="btn btn-success cabine-btn" data-action="call" data-id="${g.id}">Faire entrer quelqu'un</button>
+      `;
+    } else {
+      row.innerHTML = `
+        <div>
+          <div class="cabine-name">${g.name}</div>
+          <div class="cabine-status free">Libre — en attente d'un client</div>
+        </div>
+      `;
+    }
+    list.appendChild(row);
+  });
+  list.querySelectorAll(".cabine-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = Number(btn.dataset.id);
+      if(btn.dataset.action === "free") finishAndCallNext(id);
+      else callIntoCabine(id);
+    });
+  });
+
+  if(guichetSettingsOpen) renderGuichetSettings();
+
+  document.getElementById("toggleGuichetSettings").addEventListener("click", () => {
+    guichetSettingsOpen = !guichetSettingsOpen;
+    render();
+  });
+}
+
+function renderAddedResult(){
+  const zone = document.getElementById("ticketResultZone");
+  if(!zone) return;
+  if(!lastAddedId){
+    zone.innerHTML = "";
+    return;
+  }
+  const idx = serverState.queue.findIndex(p => p.id === lastAddedId);
+  if(idx === -1){
+    zone.innerHTML = `
+      <div class="ticket-result">
+        <div class="tlabel">Dernière personne ajoutée sur cet écran</div>
+        <div class="tpos">Elle a déjà été appelée.</div>
+      </div>
+    `;
+    return;
+  }
+  const entry = serverState.queue[idx];
+  const posText = idx === 0
+    ? "Cette personne sera la prochaine appelée."
+    : `${idx} personne(s) avant elle.`;
+  zone.innerHTML = `
+    <div class="ticket-result">
+      <div class="tlabel">Ajoutée à la file</div>
+      <div class="tname">${entry.name}</div>
+      <div class="tcat">${entry.label}</div>
+      <div class="tpos">${posText}</div>
+    </div>
+  `;
+}
+
+function renderGuichetSettings(){
+  const block = document.getElementById("guichetSettings");
+  if(!block) return;
+  block.innerHTML = "";
+  serverState.guichets.forEach(gu => {
+    const row = document.createElement("div");
+    row.className = "row-line";
+    row.innerHTML = `<input type="text" class="rename-input" value="${gu.name}">`;
+    const input = row.querySelector(".rename-input");
+    input.addEventListener("keydown", (e) => { if(e.key === "Enter") input.blur(); });
+    input.addEventListener("blur", () => {
+      const val = input.value.trim();
+      if(val && val !== gu.name) renameGuichet(gu.id, val);
+    });
+    const rm = document.createElement("button");
+    rm.className = "remove-x";
+    rm.textContent = "×";
+    rm.title = "Retirer cette cabine";
+    rm.addEventListener("click", () => { removeGuichet(gu.id); });
+    row.appendChild(rm);
+    block.appendChild(row);
+  });
+  const addRow = document.createElement("div");
+  addRow.className = "add-row";
+  addRow.innerHTML = `<input type="text" id="newGuichetName" placeholder="Nom de la nouvelle cabine">
+                       <button class="btn btn-quiet" id="addGuichetBtn">Ajouter</button>`;
+  block.appendChild(addRow);
+  document.getElementById("addGuichetBtn").addEventListener("click", () => {
+    const val = document.getElementById("newGuichetName").value.trim();
+    addGuichet(val);
+  });
+}
+
+function renderCatSettings(){
+  const block = document.getElementById("catSettings");
+  if(!block) return;
+  block.innerHTML = "";
+  serverState.categories.forEach((cat, index) => {
+    const row = document.createElement("div");
+    row.className = "row-line";
+    row.innerHTML = `<span style="flex:1; font-size:14px;">${cat.label}${cat.priority ? " (prioritaire)" : ""}</span>`;
+    const rm = document.createElement("button");
+    rm.className = "remove-x";
+    rm.textContent = "×";
+    rm.title = "Retirer ce motif";
+    rm.addEventListener("click", () => { removeCategoryAt(index); });
+    row.appendChild(rm);
+    block.appendChild(row);
+  });
+  const addRow = document.createElement("div");
+  addRow.className = "add-row";
+  addRow.innerHTML = `<input type="text" id="newCatName" placeholder="Nouveau motif (ex : Soin)">
+                       <button class="btn btn-quiet" id="addCatBtn">Ajouter</button>`;
+  block.appendChild(addRow);
+  document.getElementById("addCatBtn").addEventListener("click", () => {
+    const val = document.getElementById("newCatName").value.trim();
+    if(val) addCategory(val);
+  });
+}
+
+/* ---- Vue PLANNING (rendez-vous, plusieurs jours, créneaux horaires) ---- */
+function todayDateStr(offsetDays){
+  const d = new Date();
+  d.setDate(d.getDate() + (offsetDays || 0));
+  return d.toISOString().slice(0, 10);
+}
+function formatDayLabel(dateStr){
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+function generateSlots(){
+  const cfg = serverState.planningConfig;
+  const slots = [];
+  const start = cfg.startHour * 60;
+  const end = cfg.endHour * 60;
+  for(let t = start; t < end; t += cfg.slotMinutes){
+    const h = String(Math.floor(t / 60)).padStart(2, "0");
+    const m = String(t % 60).padStart(2, "0");
+    slots.push(`${h}:${m}`);
+  }
+  return slots;
+}
+
+function renderPlanning(){
+  if(!planningSelectedDate) planningSelectedDate = todayDateStr(0);
+  const days = [];
+  for(let i = 0; i < 7; i++) days.push(todayDateStr(i));
+  if(!days.includes(planningSelectedDate)) planningSelectedDate = days[0];
+  const isToday = planningSelectedDate === todayDateStr(0);
+
+  viewContainer.innerHTML = `
+    <div class="agent">
+      <div class="card">
+        <h2>Planning des rendez-vous</h2>
+        <div class="day-tabs" id="dayTabs"></div>
+        <div class="slot-list" id="slotList"></div>
+        <button class="settings-toggle" id="togglePlanningSettings">Régler les horaires</button>
+        <div class="settings-block" id="planningSettings" style="display:${planningSettingsOpen ? "block" : "none"};"></div>
+      </div>
+    </div>
+  `;
+
+  const tabs = document.getElementById("dayTabs");
+  days.forEach(d => {
+    const btn = document.createElement("button");
+    btn.className = "day-tab" + (d === planningSelectedDate ? " active" : "");
+    btn.textContent = d === todayDateStr(0) ? "Aujourd'hui" : formatDayLabel(d);
+    btn.addEventListener("click", () => { planningSelectedDate = d; openSlotKey = null; render(); });
+    tabs.appendChild(btn);
+  });
+
+  const list = document.getElementById("slotList");
+  generateSlots().forEach(time => {
+    const appt = serverState.appointments.find(a => a.date === planningSelectedDate && a.time === time);
+    const key = planningSelectedDate + "|" + time;
+    const row = document.createElement("div");
+
+    if(appt){
+      row.className = "slot-row" + (appt.checkedIn ? " slot-row-done" : "");
+      row.innerHTML = `
+        <div class="slot-time">${time}</div>
+        <div class="slot-info">
+          <div class="slot-name">${appt.name}</div>
+          <div class="slot-cat">${appt.label}${appt.checkedIn ? " · Venu(e)" : ""}</div>
+        </div>
+        <div class="slot-actions">
+          ${isToday && !appt.checkedIn ? `<button class="btn btn-success slot-checkin" data-id="${appt.id}">Faire venir</button>` : ""}
+          <button class="remove-x slot-remove" data-id="${appt.id}" title="Retirer du planning">×</button>
+        </div>
+      `;
+    } else if(openSlotKey === key){
+      row.className = "slot-row slot-row-form";
+      row.innerHTML = `
+        <div class="slot-time">${time}</div>
+        <div class="slot-form">
+          <input type="text" class="name-input slot-name-input" placeholder="Nom de la personne">
+          <div class="cat-grid" id="slotCatGrid"></div>
+          <button class="btn btn-quiet slot-cancel">Annuler</button>
+        </div>
+      `;
+    } else {
+      row.className = "slot-row";
+      row.innerHTML = `
+        <div class="slot-time">${time}</div>
+        <div class="slot-free">Libre</div>
+        <button class="btn btn-quiet slot-book" data-key="${key}">Réserver</button>
+      `;
+    }
+    list.appendChild(row);
+  });
+
+  list.querySelectorAll(".slot-book").forEach(btn => {
+    btn.addEventListener("click", () => { openSlotKey = btn.dataset.key; render(); });
+  });
+
+  const catGrid = document.getElementById("slotCatGrid");
+  if(catGrid){
+    serverState.categories.forEach(cat => {
+      const b = document.createElement("button");
+      b.className = "cat-btn" + (cat.priority ? " priority" : "");
+      b.innerHTML = `<div class="label">${cat.label}</div>`;
+      b.addEventListener("click", () => {
+        const nameInput = document.querySelector(".slot-name-input");
+        const name = nameInput.value.trim();
+        if(!name){ nameInput.focus(); return; }
+        const [date, time] = openSlotKey.split("|");
+        addAppointment(date, time, name, cat.label, cat.priority);
+        openSlotKey = null;
+      });
+      catGrid.appendChild(b);
+    });
+  }
+  const cancelBtn = document.querySelector(".slot-cancel");
+  if(cancelBtn) cancelBtn.addEventListener("click", () => { openSlotKey = null; render(); });
+
+  list.querySelectorAll(".slot-checkin").forEach(btn => {
+    btn.addEventListener("click", () => { checkInAppointment(btn.dataset.id); });
+  });
+  list.querySelectorAll(".slot-remove").forEach(btn => {
+    btn.addEventListener("click", () => { removeAppointment(btn.dataset.id); });
+  });
+
+  if(planningSettingsOpen) renderPlanningSettings();
+  document.getElementById("togglePlanningSettings").addEventListener("click", () => {
+    planningSettingsOpen = !planningSettingsOpen;
+    render();
+  });
+}
+
+function renderPlanningSettings(){
+  const block = document.getElementById("planningSettings");
+  if(!block) return;
+  const cfg = serverState.planningConfig;
+  block.innerHTML = `
+    <div class="row-line">
+      <span style="width:80px; font-size:14px;">Ouverture</span>
+      <input type="number" id="cfgStart" min="0" max="23" value="${cfg.startHour}" style="width:64px;">
+      <span style="width:80px; font-size:14px;">Fermeture</span>
+      <input type="number" id="cfgEnd" min="1" max="24" value="${cfg.endHour}" style="width:64px;">
+    </div>
+    <div class="row-line">
+      <span style="width:150px; font-size:14px;">Durée d'un créneau (min)</span>
+      <input type="number" id="cfgSlot" min="5" max="120" step="5" value="${cfg.slotMinutes}" style="width:64px;">
+    </div>
+    <div class="row-line">
+      <button class="btn btn-quiet" id="saveCfgBtn">Enregistrer les horaires</button>
+    </div>
+  `;
+  document.getElementById("saveCfgBtn").addEventListener("click", () => {
+    updatePlanningConfig({
+      startHour: Number(document.getElementById("cfgStart").value),
+      endHour: Number(document.getElementById("cfgEnd").value),
+      slotMinutes: Number(document.getElementById("cfgSlot").value),
+    });
+  });
+}
+
+/* ---- Vue HISTORIQUE (personnes déjà servies) ---- */
+function formatDateTime(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " à " +
+         d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+function isSameDay(ts, dateStr){
+  const d = new Date(ts);
+  return d.toISOString().slice(0, 10) === dateStr;
+}
+
+let historyFilter = "today"; // "today" | "all"
+
+function renderHistorique(){
+  const todayStr = todayDateStr(0);
+  const filtered = historyFilter === "today"
+    ? serverState.history.filter(h => isSameDay(h.servedAt, todayStr))
+    : serverState.history;
+
+  viewContainer.innerHTML = `
+    <div class="agent">
+      <div class="card">
+        <h2>Historique des personnes reçues</h2>
+        <div class="switcher" id="histFilter" style="margin-bottom:16px; display:inline-flex;">
+          <button data-filter="today" class="${historyFilter === "today" ? "active" : ""}">Aujourd'hui</button>
+          <button data-filter="all" class="${historyFilter === "all" ? "active" : ""}">Tout l'historique</button>
+        </div>
+        <div id="histList"></div>
+        <div class="queue-preview">${filtered.length} personne(s) ${historyFilter === "today" ? "reçue(s) aujourd'hui" : "au total"}</div>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll("#histFilter button").forEach(b => {
+    b.addEventListener("click", () => { historyFilter = b.dataset.filter; render(); });
+  });
+
+  const list = document.getElementById("histList");
+  if(filtered.length === 0){
+    list.innerHTML = `<div class="cabine-status free">Aucune personne enregistrée pour le moment.</div>`;
+    return;
+  }
+  filtered.forEach(h => {
+    const row = document.createElement("div");
+    row.className = "cabine-row";
+    row.innerHTML = `
+      <div>
+        <div class="cabine-name">${h.name}</div>
+        <div class="cabine-status free">${h.label} · ${h.guichetName}</div>
+      </div>
+      <div class="cabine-status free">${formatDateTime(h.servedAt)}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* ---- Vue GÉRANT (prix, recette, vue d'ensemble) ---- */
+function renderGerant(){
+  const todayStr = todayDateStr(0);
+  const todayEntries = serverState.history.filter(h => isSameDay(h.servedAt, todayStr));
+  const todayRevenue = todayEntries.reduce((sum, h) => sum + (h.price || 0), 0);
+  const todayCount = todayEntries.length;
+
+  viewContainer.innerHTML = `
+    <div class="agent">
+      <div class="card">
+        <h2>Tarif</h2>
+        <p class="sub-inline">Prix appliqué à chaque personne reçue en cabine. Modifiable à tout moment ; les recettes déjà enregistrées ne changent pas rétroactivement.</p>
+        <div class="row-line">
+          <input type="number" id="priceInput" min="0" step="1" value="${serverState.pricePerPerson}" style="width:120px; font-size:18px; font-weight:700;">
+          <button class="btn btn-primary" id="savePriceBtn">Enregistrer le prix</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recette</h2>
+        <div class="cabine-row">
+          <div>
+            <div class="cabine-name">Aujourd'hui</div>
+            <div class="cabine-status free">${todayCount} personne(s) reçue(s)</div>
+          </div>
+          <div class="cabine-name">${todayRevenue}</div>
+        </div>
+        <div class="cabine-row">
+          <div>
+            <div class="cabine-name">Depuis le début</div>
+            <div class="cabine-status free">${serverState.servedCount} personne(s) reçue(s) au total</div>
+          </div>
+          <div class="cabine-name">${serverState.totalRevenue}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("savePriceBtn").addEventListener("click", () => {
+    const val = Number(document.getElementById("priceInput").value);
+    if(!isNaN(val) && val >= 0) setPricePerPerson(val);
+  });
+}
+
+/* ---- Vue ÉCRAN ---- */
+function renderEcran(){
+  const upcoming = serverState.queue.slice(0, 6);
+  viewContainer.innerHTML = `
+    <div class="ecran">
+      <div class="ecran-top">
+        <div class="ecran-lieu">${serverState.lieu}</div>
+        <div class="ecran-clock" id="clock"></div>
+      </div>
+      <div class="ecran-main">
+        <div class="ecran-current">
+          <div class="ecran-current-label">Personne appelée</div>
+          ${serverState.lastCalled
+            ? `<div class="ecran-current-name${flashNow ? " flash" : ""}" id="currentTicketEl">${serverState.lastCalled.name}</div>
+               <div class="ecran-current-cat">${serverState.lastCalled.label}</div>
+               <div class="ecran-current-guichet">${serverState.lastCalled.guichetName}</div>`
+            : `<div class="ecran-empty">Aucune personne appelée pour le moment</div>`
+          }
+        </div>
+        <div class="ecran-side">
+          <div>
+            <div class="ecran-panel-title">Cabines</div>
+            <div class="guichet-rows" id="guichetRows"></div>
+          </div>
+          <div>
+            <div class="ecran-panel-title">Prochaines personnes</div>
+            <div class="waiting-list" id="waitingList"></div>
+            <div class="waiting-count">${serverState.queue.length} en attente</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  flashNow = false;
+
+  const rows = document.getElementById("guichetRows");
+  serverState.guichets.forEach(g => {
+    const row = document.createElement("div");
+    row.className = "guichet-row";
+    row.innerHTML = g.current
+      ? `<span class="name">${g.name}</span><span class="ticket">${g.current.name} · ${g.current.label}</span>`
+      : `<span class="name">${g.name}</span><span class="ticket idle">libre</span>`;
+    rows.appendChild(row);
+  });
+
+  const wl = document.getElementById("waitingList");
+  if(upcoming.length === 0){
+    wl.innerHTML = `<span class="waiting-count">Aucune personne en attente</span>`;
+  } else {
+    upcoming.forEach(t => {
+      const chip = document.createElement("span");
+      chip.className = "waiting-chip";
+      chip.textContent = t.name + " · " + t.label;
+      wl.appendChild(chip);
+    });
+  }
+
+  updateClock();
+}
+
+function updateClock(){
+  const el = document.getElementById("clock");
+  if(!el) return;
+  const now = new Date();
+  el.textContent = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+setInterval(() => { if(localView === "ecran") updateClock(); }, 15000);
+
+render();
+</script>
+</body>
+</html>
